@@ -10,3 +10,7 @@ wheels/
 .venv
 
 .reasonix
+
+# Sensitive credentials
+.env
+task.json

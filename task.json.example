@@ -1,0 +1,15 @@
+{
+  "webappId": "1937084629516193794",
+  "modifications": [
+    {
+      "nodeId": "node_xxx",
+      "fieldName": "prompt",
+      "fieldValue": "一只可爱的猫"
+    },
+    {
+      "nodeId": "node_yyy",
+      "fieldName": "image",
+      "filePath": "D:/images/cat.jpg"
+    }
+  ]
+}
