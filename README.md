@@ -1,56 +1,74 @@
-# Hood — RunningHub AI 应用 CLI 工具
+# Hood — AI 工作流编排工具
 
-通过命令行调用 [RunningHub](https://www.runninghub.cn) AI 应用的 API，自动修改节点参数、提交任务并轮询结果。
+将 [RunningHub](https://www.runninghub.cn) 云端推理与本地 ComfyUI VAE 解码串联为一条完整流水线。
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-pip install requests
+uv sync
 ```
 
-### 2. 配置 API 密钥
+### 2. 配置
 
 在项目根目录创建 `.env` 文件（参考 `.env.example`）：
 
-```
-RUNNINGHUB_API_KEY=从RunningHub控制台获取的密钥
+```env
+# RunningHub API 密钥 — 从 https://www.runninghub.cn 控制台获取
+RUNNINGHUB_API_KEY=你的密钥
+
+# 本地 ComfyUI 配置
+COMFYUI_SERVER=127.0.0.1:8188
+COMFYUI_INPUT_DIR=D:/path/to/ComfyUI/input
 ```
 
 > `.env` 已在 `.gitignore` 中，不会误提交到 Git。
 
-也可以设置系统环境变量（`.env` 不存在时作为回退）：
+### 3. 准备 ComfyUI 环境
 
-```cmd
-set RUNNINGHUB_API_KEY=你的密钥
-```
+- 确保本地 ComfyUI 已启动（默认 `127.0.0.1:8188`）
+- VAE 模型放在 ComfyUI 的 `models/vae/` 目录下
 
-### 3. 使用
+## 使用
 
-#### 查看应用节点信息
-
-先获取指定 AI 应用的节点列表，方便编写 JSON：
+### 完整流水线（默认）
 
 ```bash
-python main.py info <webappId>
+uv run python main.py
+```
+
+或显式指定：
+
+```bash
+uv run python main.py run [task.json]
+```
+
+流程：
+1. 读取 `task.json`，修改节点参数
+2. 提交到 RunningHub 云端执行
+3. 轮询等待完成
+4. 下载输出的 `.latent` 文件**直接到 ComfyUI input/ 目录**
+5. 自动调用本地 ComfyUI 进行 VAE 解码
+6. 最终图片保存到 `output/` 目录
+
+### 仅查看节点信息
+
+```bash
+uv run python main.py info <webappId>
 ```
 
 `webappId` 是 AI 应用详情页 URL 末尾的数字，例如 `https://www.runninghub.cn/ai-detail/1937084629516193794` 中的 `1937084629516193794`。
 
-#### 提交任务
+### 独立本地解码
 
-编写 `task.json` 放到项目根目录（参考 `task.json.example`），然后直接运行：
+已有 `.latent` 文件时，可单独执行 VAE 解码：
 
 ```bash
-python main.py
+uv run python main.py decode <latent_file>
 ```
 
-程序会自动读取根目录下的 `task.json` 并提交任务。
-
-任务完成后，输出的 `.latent` 文件会自动下载到 `download/` 目录。
-
-## JSON 配置说明
+## task.json 配置说明
 
 ```json
 {
@@ -83,25 +101,37 @@ python main.py
 
 | 命令 | 说明 |
 |------|------|
-| `python main.py info <webappId>` | 查看应用的节点信息 |
-| `python main.py` | 自动读取 `task.json` 提交任务，完成后下载 `.latent` 到 `download/` |
+| `uv run python main.py` | **默认**完整流水线（等效于 `run`） |
+| `uv run python main.py run [task.json]` | 完整流水线：提交云端 → 下载 latent → 本地解码 |
+| `uv run python main.py info <webappId>` | 查看 RunningHub 应用的节点信息 |
+| `uv run python main.py decode <latent_file>` | 独立的本地 ComfyUI VAE 解码 |
 
 ## 工作流程
 
-```
-.env (密钥) ──> 读取节点信息 ──> 应用修改（文本/文件上传）──> 提交任务 ──> 轮询结果 ──> 下载 .latent
+```mermaid
+flowchart TD
+    A[task.json] --> B[main.py run]
+    B --> C[RunningHub 云端推理]
+    C -->|生成 .latent 文件| D[下载到 ComfyUI input/]
+    D --> E[修改 VAE_Decoder.json<br>latent 文件名]
+    E --> F[提交到本地 ComfyUI]
+    F --> G[VAE 解码]
+    G --> H[output/ 最终图片]
 ```
 
 ## 项目结构
 
 ```
-D:\Github\Hood\
-├── main.py              # 主程序
-├── .env                 # API 密钥（本地文件，不提交 Git）
-├── .env.example         # 密钥模板（可提交 Git）
-├── task.json.example    # 任务配置模板
-├── download/            # 输出的 .latent 文件（自动生成）
-├── .gitignore
-├── pyproject.toml
+Hood/
+├── main.py               # CLI 编排器（info / run / decode）
+├── runninghub.py          # RunningHub API 客户端
+├── comfyui.py             # 本地 ComfyUI 客户端
+├── VAE_Decoder.json       # VAE 解码工作流模板
+├── task.json              # RunningHub 任务配置
+├── .env                   # 环境配置（API 密钥 + ComfyUI 路径）
+├── .env.example           # 配置示例
+├── pyproject.toml         # 项目配置
+├── output/                # 解码结果图片
+├── download/              # 其他下载文件
 └── README.md
 ```
