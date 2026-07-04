@@ -15,5 +15,5 @@ wheels/
 .env
 
 # Downloaded outputs
-download/
+output/
 task.json
