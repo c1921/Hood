@@ -13,4 +13,7 @@ wheels/
 
 # Sensitive credentials
 .env
+
+# Downloaded outputs
+download/
 task.json

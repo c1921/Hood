@@ -48,6 +48,8 @@ python main.py
 
 程序会自动读取根目录下的 `task.json` 并提交任务。
 
+任务完成后，输出的 `.latent` 文件会自动下载到 `download/` 目录。
+
 ## JSON 配置说明
 
 ```json
@@ -82,12 +84,12 @@ python main.py
 | 命令 | 说明 |
 |------|------|
 | `python main.py info <webappId>` | 查看应用的节点信息 |
-| `python main.py` | 自动读取 `task.json` 并提交任务 |
+| `python main.py` | 自动读取 `task.json` 提交任务，完成后下载 `.latent` 到 `download/` |
 
 ## 工作流程
 
 ```
-.env (密钥) ──> 读取节点信息 ──> 应用修改（文本/文件上传）──> 提交任务 ──> 轮询结果
+.env (密钥) ──> 读取节点信息 ──> 应用修改（文本/文件上传）──> 提交任务 ──> 轮询结果 ──> 下载 .latent
 ```
 
 ## 项目结构
@@ -98,6 +100,7 @@ D:\Github\Hood\
 ├── .env                 # API 密钥（本地文件，不提交 Git）
 ├── .env.example         # 密钥模板（可提交 Git）
 ├── task.json.example    # 任务配置模板
+├── download/            # 输出的 .latent 文件（自动生成）
 ├── .gitignore
 ├── pyproject.toml
 └── README.md

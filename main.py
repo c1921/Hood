@@ -130,6 +130,36 @@ def poll_until_complete(task_id, API_KEY, timeout=600):
     return None
 
 
+def download_outputs(data_list):
+    """下载输出结果中所有 latent 文件到 download/ 目录"""
+    latent_items = [item for item in data_list if item.get("fileType") == "latent"]
+    if not latent_items:
+        print("[!] 没有 latent 文件可供下载")
+        return
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    out_dir = os.path.join(script_dir, "download")
+    os.makedirs(out_dir, exist_ok=True)
+    print(f"[下载] 开始下载 {len(latent_items)} 个 latent 文件到 {out_dir}")
+
+    for item in latent_items:
+        file_url = item.get("fileUrl")
+        if not file_url:
+            print("[!]  跳过：缺少 fileUrl")
+            continue
+        file_name = os.path.basename(file_url.split("?")[0])
+        save_path = os.path.join(out_dir, file_name)
+        try:
+            resp = requests.get(file_url, stream=True, timeout=60)
+            resp.raise_for_status()
+            with open(save_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"  [OK] {file_name} 已保存")
+        except Exception as e:
+            print(f"  [Error] {file_name} 下载失败: {e}")
+
+
 def cmd_info(webapp_id, api_key):
     """info 子命令：获取并打印节点信息"""
     print(f"[信息] 正在获取 webappId={webapp_id} 的节点信息...")
@@ -195,7 +225,9 @@ def cmd_run(config_path, api_key):
     print(f"[任务ID] taskId: {task_id}")
 
     print_node_errors(submit_result)
-    poll_until_complete(task_id, api_key)
+    result_data = poll_until_complete(task_id, api_key)
+    if result_data:
+        download_outputs(result_data)
     print("[OK] 任务完成！")
 
 
