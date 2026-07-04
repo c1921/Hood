@@ -14,25 +14,29 @@ API_HOST = "www.runninghub.cn"
 
 def get_node_info(webapp_id: str, api_key: str) -> list:
     """获取应用的节点信息列表"""
-    conn = http.client.HTTPSConnection(API_HOST)
-    payload = ""
-    headers = {}
-    conn.request(
-        "GET",
-        f"/api/webapp/apiCallDemo?apiKey={api_key}&webappId={webapp_id}",
-        payload,
-        headers,
-    )
-    res = conn.getresponse()
-    data = json.loads(res.read().decode("utf-8"))
-    node_data = data.get("data")
-    if node_data is None:
-        print("[Error] API 返回异常:", json.dumps(data, indent=2, ensure_ascii=False))
+    try:
+        conn = http.client.HTTPSConnection(API_HOST, timeout=30)
+        payload = ""
+        headers = {}
+        conn.request(
+            "GET",
+            f"/api/webapp/apiCallDemo?apiKey={api_key}&webappId={webapp_id}",
+            payload,
+            headers,
+        )
+        res = conn.getresponse()
+        data = json.loads(res.read().decode("utf-8"))
+        node_data = data.get("data")
+        if node_data is None:
+            print("[Error] API 返回异常:", json.dumps(data, indent=2, ensure_ascii=False))
+            return []
+        node_info_list = node_data.get("nodeInfoList", [])
+        print("[OK] 提取的 nodeInfoList:")
+        print(json.dumps(node_info_list, indent=2, ensure_ascii=False))
+        return node_info_list
+    except Exception as e:
+        print(f"[Error] 获取节点信息失败: {e}")
         return []
-    node_info_list = node_data.get("nodeInfoList", [])
-    print("[OK] 提取的 nodeInfoList:")
-    print(json.dumps(node_info_list, indent=2, ensure_ascii=False))
-    return node_info_list
 
 
 def upload_file(api_key: str, file_path: str) -> dict:
@@ -48,32 +52,40 @@ def upload_file(api_key: str, file_path: str) -> dict:
 
 def submit_task(webapp_id: str, node_info_list: list, api_key: str) -> dict:
     """提交任务到 RunningHub"""
-    conn = http.client.HTTPSConnection(API_HOST)
-    payload = json.dumps(
-        {
-            "webappId": webapp_id,
-            "apiKey": api_key,
-            "nodeInfoList": node_info_list,
-        }
-    )
-    headers = {"Host": API_HOST, "Content-Type": "application/json"}
-    conn.request("POST", "/task/openapi/ai-app/run", payload, headers)
-    res = conn.getresponse()
-    data = json.loads(res.read().decode("utf-8"))
-    conn.close()
-    return data
+    try:
+        conn = http.client.HTTPSConnection(API_HOST, timeout=30)
+        payload = json.dumps(
+            {
+                "webappId": webapp_id,
+                "apiKey": api_key,
+                "nodeInfoList": node_info_list,
+            }
+        )
+        headers = {"Host": API_HOST, "Content-Type": "application/json"}
+        conn.request("POST", "/task/openapi/ai-app/run", payload, headers)
+        res = conn.getresponse()
+        data = json.loads(res.read().decode("utf-8"))
+        conn.close()
+        return data
+    except Exception as e:
+        print(f"[Error] 提交任务失败: {e}")
+        return {"code": -1, "message": str(e)}
 
 
 def query_task_outputs(task_id: str, api_key: str) -> dict:
     """查询任务输出"""
-    conn = http.client.HTTPSConnection(API_HOST)
-    payload = json.dumps({"apiKey": api_key, "taskId": task_id})
-    headers = {"Host": API_HOST, "Content-Type": "application/json"}
-    conn.request("POST", "/task/openapi/outputs", payload, headers)
-    res = conn.getresponse()
-    data = json.loads(res.read().decode("utf-8"))
-    conn.close()
-    return data
+    try:
+        conn = http.client.HTTPSConnection(API_HOST, timeout=30)
+        payload = json.dumps({"apiKey": api_key, "taskId": task_id})
+        headers = {"Host": API_HOST, "Content-Type": "application/json"}
+        conn.request("POST", "/task/openapi/outputs", payload, headers)
+        res = conn.getresponse()
+        data = json.loads(res.read().decode("utf-8"))
+        conn.close()
+        return data
+    except Exception as e:
+        print(f"[Error] 查询任务输出失败: {e}")
+        return {"code": -1, "message": str(e)}
 
 
 def print_node_errors(submit_result: dict) -> None:
@@ -105,6 +117,8 @@ def poll_until_complete(task_id: str, api_key: str, timeout: int = 600) -> list 
         if code == 0 and data:  # 成功
             print("[完成] 生成结果完成！")
             return data
+        elif code == -1:  # 网络错误（超时/断连等）
+            print("[!] 网络请求异常，稍后重试...")
         elif code == 805:  # 任务失败
             failed_reason = data.get("failedReason") if data else None
             print("[Error] 任务失败！")

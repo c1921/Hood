@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 from comfyui import ComfyUIClient
 from runninghub import (
@@ -62,16 +63,27 @@ def _load_comfyui_config() -> tuple[str, str | None]:
     return server, input_dir
 
 
+def _format_duration(seconds: float) -> str:
+    """将秒数格式化为可读的耗时字符串"""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    return f"{minutes}min{secs:.0f}s"
+
+
 # ── 子命令实现 ────────────────────────────────────────────
 
 
 def cmd_info(webapp_id: str) -> None:
     """查看应用节点信息"""
+    t0 = time.time()
     api_key = _load_api_key()
     print(f"[信息] 正在获取 webappId={webapp_id} 的节点信息...")
     nodes = get_node_info(webapp_id, api_key)
     if not nodes:
         print("[!] 未获取到节点信息，请检查 webappId 是否正确。")
+    print(f"[耗时] 总耗时 {_format_duration(time.time() - t0)}")
 
 
 def cmd_run(task_json_path: str) -> None:
@@ -82,6 +94,7 @@ def cmd_run(task_json_path: str) -> None:
       3. 下载 latent 到 ComfyUI input/
       4. 本地 ComfyUI VAE 解码 → 保存图片
     """
+    t_total = time.time()
     api_key = _load_api_key()
 
     # 读取配置
@@ -92,6 +105,7 @@ def cmd_run(task_json_path: str) -> None:
     modifications = config.get("modifications", [])
 
     # ── 1. 获取节点信息并修改 ──
+    t1 = time.time()
     print(f"[信息] 正在获取 webappId={webapp_id} 的节点信息...")
     node_info_list = get_node_info(webapp_id, api_key)
 
@@ -127,8 +141,10 @@ def cmd_run(task_json_path: str) -> None:
             field_value = mod.get("fieldValue", "")
             target_node["fieldValue"] = field_value
             print(f"[OK] 已更新 fieldValue: {field_value}")
+    print(f"[耗时] 获取节点信息 & 修改: {_format_duration(time.time() - t1)}")
 
     # ── 2. 提交任务到 RunningHub ──
+    t2 = time.time()
     print("[启动] 提交任务到 RunningHub...")
     submit_result = submit_task(webapp_id, node_info_list, api_key)
     print("[结果] 提交任务返回:", json.dumps(submit_result, ensure_ascii=False, indent=2))
@@ -146,8 +162,10 @@ def cmd_run(task_json_path: str) -> None:
     if not output_data:
         print("[Error] 任务未成功完成")
         sys.exit(1)
+    print(f"[耗时] 云端推理 (提交+轮询): {_format_duration(time.time() - t2)}")
 
     # ── 3. 下载 latent 到 ComfyUI input/ ──
+    t3 = time.time()
     comfy_server, comfy_input_dir = _load_comfyui_config()
 
     if not comfy_input_dir:
@@ -159,9 +177,13 @@ def cmd_run(task_json_path: str) -> None:
     latent_files = download_files(output_data, comfy_input_dir)
     if not latent_files:
         print("[!] 没有下载到 latent 文件，跳过本地解码。")
+        print(f"[耗时] 下载 latent: {_format_duration(time.time() - t3)}")
+        print(f"\n[耗时] 流水线总耗时 {_format_duration(time.time() - t_total)}")
         return
+    print(f"[耗时] 下载 latent: {_format_duration(time.time() - t3)}")
 
     # ── 4. 本地 ComfyUI 解码 ──
+    t4 = time.time()
     client = ComfyUIClient(server_address=comfy_server, input_dir=comfy_input_dir)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(script_dir, "output")
@@ -175,12 +197,15 @@ def cmd_run(task_json_path: str) -> None:
             print(f"[完成] 解码完成，共 {total} 张图片 -> {output_dir}")
         except Exception as e:
             print(f"[Error] 解码失败: {e}")
+    print(f"[耗时] 本地 VAE 解码: {_format_duration(time.time() - t4)}")
 
     print(f"\n[OK] 流水线全部完成！最终图片在: {output_dir}")
+    print(f"[耗时] 流水线总耗时 {_format_duration(time.time() - t_total)}")
 
 
 def cmd_decode(latent_file: str) -> None:
     """独立的本地解码：将 latent 文件送入 ComfyUI VAE 解码"""
+    t0 = time.time()
     comfy_server, comfy_input_dir = _load_comfyui_config()
 
     if not comfy_input_dir:
@@ -196,6 +221,7 @@ def cmd_decode(latent_file: str) -> None:
     result = client.decode_latent(latent_file, output_dir=output_dir)
     total = sum(len(v) for v in result.values())
     print(f"[完成] 解码完成，共 {total} 张图片 -> {output_dir}")
+    print(f"[耗时] 总耗时 {_format_duration(time.time() - t0)}")
 
 
 # ── CLI 入口 ──────────────────────────────────────────────
