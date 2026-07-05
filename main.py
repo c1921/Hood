@@ -188,6 +188,7 @@ def cmd_run(task_json_path: str) -> None:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(script_dir, "output")
 
+    decode_failed = False
     for latent_path in latent_files:
         print(f"\n{'='*60}")
         print(f"[解码] 处理 latent: {latent_path}")
@@ -197,7 +198,12 @@ def cmd_run(task_json_path: str) -> None:
             print(f"[完成] 解码完成，共 {total} 张图片 -> {output_dir}")
         except Exception as e:
             print(f"[Error] 解码失败: {e}")
+            decode_failed = True
     print(f"[耗时] 本地 VAE 解码: {_format_duration(time.time() - t4)}")
+
+    if decode_failed:
+        print("\n[Error] 部分 latent 解码失败，流水线未全部完成。最终图片可能不完整。")
+        sys.exit(1)
 
     print(f"\n[OK] 流水线全部完成！最终图片在: {output_dir}")
     print(f"[耗时] 流水线总耗时 {_format_duration(time.time() - t_total)}")
