@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/preferences_service.dart';
 import '../models/api_models.dart';
 import 'node_info_screen.dart';
 import 'run_pipeline_screen.dart';
@@ -8,8 +9,13 @@ import 'task_status_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final ApiService apiService;
+  final PreferencesService prefs;
 
-  const HomeScreen({super.key, required this.apiService});
+  const HomeScreen({
+    super.key,
+    required this.apiService,
+    required this.prefs,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -79,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (result != null && result.isNotEmpty) {
       widget.apiService.updateBaseUrl(result);
+      await widget.prefs.setServerUrl(result);
       _checkHealth();
     }
   }
@@ -103,11 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ── 服务器状态 ──
             _buildServerStatusCard(theme),
             const SizedBox(height: 24),
-
-            // ── 功能入口 ──
             Text('功能入口', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             _buildFeatureGrid(theme),
@@ -188,28 +192,31 @@ class _HomeScreenState extends State<HomeScreen> {
         label: '节点信息',
         desc: '查看 RunningHub 应用的节点列表',
         color: Colors.indigo,
-        screen: const NodeInfoScreen(),
+        screen: NodeInfoScreen(apiService: widget.apiService),
       ),
       _FeatureItem(
         icon: Icons.play_circle_fill_rounded,
         label: '运行流水线',
         desc: '提交云端推理 → VAE 解码完整流程',
         color: Colors.deepOrange,
-        screen: const RunPipelineScreen(),
+        screen: RunPipelineScreen(
+          apiService: widget.apiService,
+          prefs: widget.prefs,
+        ),
       ),
       _FeatureItem(
         icon: Icons.image_rounded,
         label: 'VAE 解码',
         desc: '独立解码 .latent 文件为图片',
         color: Colors.teal,
-        screen: const DecodeScreen(),
+        screen: DecodeScreen(apiService: widget.apiService),
       ),
       _FeatureItem(
         icon: Icons.pending_actions_rounded,
         label: '任务状态',
         desc: '查询异步任务的执行进度',
         color: Colors.blue,
-        screen: const TaskStatusScreen(),
+        screen: TaskStatusScreen(apiService: widget.apiService),
       ),
     ];
 
@@ -231,9 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => _wrapWithService(f.screen),
-                ),
+                MaterialPageRoute(builder: (_) => f.screen),
               );
             },
             child: Padding(
@@ -260,22 +265,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
-  }
-
-  Widget _wrapWithService(Widget screen) {
-    if (screen is NodeInfoScreen) {
-      return NodeInfoScreen(apiService: widget.apiService);
-    }
-    if (screen is RunPipelineScreen) {
-      return RunPipelineScreen(apiService: widget.apiService);
-    }
-    if (screen is DecodeScreen) {
-      return DecodeScreen(apiService: widget.apiService);
-    }
-    if (screen is TaskStatusScreen) {
-      return TaskStatusScreen(apiService: widget.apiService);
-    }
-    return screen;
   }
 }
 
